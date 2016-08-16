@@ -1,11 +1,46 @@
 # An Array of teams I'm on. Eg ["@myorg/myteam"]
-MY_TEAMS = if fetchCachedGitHubTeamSlugs() != "err"
-  fetchCachedGitHubTeamSlugs()
-else
-  []
+TEAM_LABELS = {
+  "@github/abilibuddies":       "abilities"
+  "@github/abilities":          "abilities"
+  "@github/auditing":           "auditing"
+  "@github/backscatter":        "code-review"
+  "@github/cloud":              "cloud"
+  "@github/colorado":           "boulder"
+  "@github/core-app":           "core-app"
+  "@github/curmudgeons":        "code-review"
+  "@github/data-quality":       "database"
+  "@github/data-transitions":   "database"
+  "@github/dotcom-security":    "security"
+  "@github/high-availability":  "high-availability"
+  "@github/humans-of-platform": "platform"
+  # "early-access"
+  # "github-haystack-oncall"
+  # "go"
+  "@github/horrible-people":    "code-review"
+  "@github/orgs":               "orgs"
+  # "@github/platform":           "platform"
+  "@github/platform-graphql":   "graphql"
+  "@github/platform-tactical":  "tactical"
+  "@github/privacy":            "legal"
+  # "@github/quality":            "quality"
+  "@github/rails":              "code-review"
+  # "@github/repository-network": "repo-network"
+  "@github/schema-migrations":  "database"
+  "@github/sql":                "database"
+  "@github/systems":            "systems"
+}
+
+GENERAL_LABELS = {
+  "author": "author"
+  "direct_mention": "@me"
+  "team_mention": "team-mention"
+  "meta": "meta"
+  "watching": "watching"
+  "unknown": "unknown"
+}
 
 # Base label name to apply to nest all other labels under.
-BASE_LABEL = ["GitHub"]
+BASE_LABEL = []
 
 # Archive your messages after labeling.
 SHOULD_ARCHIVE = false
@@ -18,7 +53,7 @@ QUERY = "in:inbox AND
          )"
 
 # Finds team mentions for my teams and extracts the team name.
-MY_TEAMS_REGEX = new RegExp "(#{MY_TEAMS.join('|')})"
+MY_TEAMS_REGEX = new RegExp "(#{(key for key, value of TEAM_LABELS).join('|')})"
 
 # Private cache so we don't need to process every message every time.
 CACHE = CacheService.getUserCache()
@@ -55,7 +90,7 @@ class Label
   #
   # Returns a Label or undefined.
   @find: (name) ->
-    @all[name] if name in @names
+    @all[name]
 
   # Apply all Labels to all queued Threads.
   #
@@ -89,6 +124,10 @@ class Label
   apply: ->
     threads = (t._thread for t in @_queue)
     Thread.done.push(t.id) for t in @_queue when t.id not in Thread.done
+    name = @_label.getName()
+    for thread in threads
+      subject = thread.getFirstMessageSubject()
+      Logger.log "applying #{name} to #{subject}"
     @_label.addToThreads threads if threads.length
     @_queue = []
 
@@ -157,21 +196,25 @@ class Thread
   labelForReason: ->
     reason = @reason()
     if reason.author
-      @queueLabel ["Author"]
+      # noop, handled by your_activity@noreply now
+      # @queueLabel [GENERAL_LABELS.author]
     else if reason.mention
-      @queueLabel ["Direct Mention"]
+      # noop, handled by mention@noreply now
+      # @queueLabel [GENERAL_LABELS.direct_mention]
     else if reason.team_mention == true
-      @queueLabel ["Team Mention"] # Unknown team mentioned
+      @queueLabel [GENERAL_LABELS.team_mention] # Unknown team mentioned
     else if reason.team_mention
-      @queueLabel ["Team Mention", reason.team_mention]
+      @queueLabel [TEAM_LABELS[reason.team_mention]]
     else if reason.meta
-      @queueLabel ["Meta"]
-    else if reason.watching == true
-      @queueLabel ["Watching"] # Unknown watched repo (maybe?).
+      @queueLabel [GENERAL_LABELS.meta]
+    # else if reason.watching == true
+    #   @queueLabel [GENERAL_LABELS.watching] # Unknown watched repo (maybe?).
+    # else if reason.watching
+    #   @queueLabel [GENERAL_LABELS.watching, reason.watching]
     else if reason.watching
-      @queueLabel ["Watching", reason.watching]
+      # noop
     else
-      @queueLabel ["Unknown"]
+      @queueLabel [GENERAL_LABELS.unknown]
 
   # Queue this thread to be given a label.
   #
